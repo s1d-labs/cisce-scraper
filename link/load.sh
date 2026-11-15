@@ -1,6 +1,7 @@
 #!/bin/bash
 # Load the CISCE lists and links into ws_trideep.cisce_scraper (Metabase: "Workspace: trideep"). Run on a team box.
-# usage: link/load.sh <dir>   (<dir> holds the CSVs that link.py reads and writes, plus cisce_2018.csv, cisce_2021.csv)
+# usage: python link/link.py <dir> udise_all.csv; python link/link_2021.py <dir>; link/load.sh <dir>
+# <dir>   (<dir> holds the CSVs that link.py reads and writes, plus cisce_2018.csv, cisce_2021.csv)
 set -euo pipefail
 D=$1
 q() { psql -d ws_trideep -v ON_ERROR_STOP=1 -qc "$1"; }
@@ -27,6 +28,10 @@ load cisce_2021 cisce_2021.csv
 q "truncate cisce_scraper.link_cisce_udise"
 psql -d ws_trideep -v ON_ERROR_STOP=1 -qc "\copy cisce_scraper.link_cisce_udise (code, udise, method, score) from '$D/cisce_udise_link.csv' csv header"
 q "update cisce_scraper.link_cisce_udise set source = '2018' where source is null"
+if [ -f "$D/link_2021.csv" ]; then
+  psql -d ws_trideep -v ON_ERROR_STOP=1 -qc "\copy cisce_scraper.link_cisce_udise (code, udise, method, score) from '$D/link_2021.csv' csv header"
+  q "update cisce_scraper.link_cisce_udise set source = '2021' where source is null"
+fi
 load link_cisce_cbse cisce_cbse_link.csv
 psql -d ws_trideep -Atc "select 'udise_cisce', count(*) from cisce_scraper.udise_cisce union all select 'cisce_2018', count(*) from cisce_scraper.cisce_2018
   union all select 'cisce_2021', count(*) from cisce_scraper.cisce_2021 union all select 'link_cisce_udise', count(*) from cisce_scraper.link_cisce_udise
