@@ -8,5 +8,6 @@ print("health checks:", set_probes(FAMILY, PROBES))
 for p in PROJECTS:
     register_project(p["name"], title=p["title"], unit_label=p["unit_label"], record_label=p["record_label"],
                      expected_units=len(p["items"]), expected_records=sum(i["payload"].get("expected", 0) for i in p["items"]))
-    set_pool(p["name"], FAMILY, p["task"], target=p["target"], env=p["env"], probe=p["probe"])
-    print(p["name"], "queue:", seed_queue(p["name"], p["items"]))
+    # one page every 5 s or more (crawl.py also waits 5 s minimum), one browser per worker, 2 workers at most: a small site behind Cloudflare
+    set_pool(p["name"], FAMILY, p["task"], target=p["target"], env=p["env"], probe=p["probe"], threads=1, delay_ms=5000, max_workers=2)
+    print(p["name"], "queue:", seed_queue(p["name"], p["items"]) if p["items"] else "no items (paused)")

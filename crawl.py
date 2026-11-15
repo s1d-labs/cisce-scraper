@@ -1,9 +1,10 @@
-"""The family's `crawl` task (see scrape.json). Try it without the hub: python crawl.py --local [url] The pool worker runs it with the assignment's env and:
-SCRAPE_POOL_PROJECT (which project), SCRAPE_JOB_INDEX / SCRAPE_TOTAL_JOBS (this worker's slice), SCRAPE_MAX_HOURS (time budget).
+"""The `crawl` task: CISCE affiliated schools from locate.cisce.org (10 schools per listing page).
 
-It claims queue items from the hub, fetches each page politely (threads and delay come from the hub on every call), keeps the
-raw page in the family's bucket (the hub signs the upload; this code never holds a storage key), stores one record per book,
-and reports the standard counters (n_http, t_http_s, http_error, http_<code>) the hub uses for politeness and tracking.
+python crawl.py --local [url]   fetches one page without the hub and prints the records.
+
+The site is behind Cloudflare: plain HTTP gets 403, so pages load in headless Chromium (Playwright). A non-interactive check
+clears by itself in a few seconds. An interactive challenge ("Verify you are human") is never clicked: the task records a
+`cloudflare-challenge` failure, closes the run and exits, so the pool does not keep hitting the site.
 """
 import gzip
 import html
@@ -12,76 +13,187 @@ import os
 import re
 import sys
 import time
+from datetime import datetime, timezone
+from urllib.parse import unquote, urlsplit
 
-import requests
-from scrape_hub_client import HubClient, LocalHub, timed_get
+from scrape_hub_client import HubClient, LocalHub, count_request, stop_flag
 
 PROJECT = os.environ.get("SCRAPE_POOL_PROJECT", "")
-SITE = os.environ.get("SITE", "https://books.toscrape.com")
-DEADLINE = time.time() + float(os.environ.get("SCRAPE_MAX_HOURS", "1")) * 3600 - 120
-UA = "s1d-labs scraper (https://github.com/s1d-labs)"
-BOOK = re.compile(r'<article class="product_pod">.*?<a href="([^"]+)" title="([^"]+)".*?<p class="price_color">([^<]+)</p>.*?'
-                  r'<p class="instock availability">\s*(?:<i[^>]*></i>)?\s*([^<]+?)\s*</p>', re.S)
+SITE = os.environ.get("SITE", "https://locate.cisce.org")
+DEADLINE = time.time() + float(os.environ.get("SCRAPE_MAX_HOURS", "1")) * 3600 - 300
+MIN_DELAY_S = 5                     # one page every 5 s or more, whatever the hub says
+
+CARD = re.compile(r'<div class="school-card">(.*?)(?=<div class="school-card">|</tbody>)', re.S)
+HEAD = re.compile(r'<h6[^>]*>\s*([A-Z]{2,4}\d+)\s*-\s*(.*?)</h6>', re.S)
+BODY = re.compile(r'<p class="mb-1">(.*?)</p>', re.S)
+BADGE = re.compile(r'class="badge badge-outline-(red|blue|green)[^"]*">\s*(.*?)\s*</span>', re.S)
+SITE_LINK = re.compile(r'<a href="([^"]*)"\s+class="[^"]*visit-btn')
+LOCATIONS = re.compile(r'const locations = (\{.*?\});\s*$', re.M)
+TOTAL = re.compile(r'Showing\s+(\d+)\s+to\s+(\d+)\s+of\s+(\d+)\s+entries')
+PIN = re.compile(r"^\d[\d \-]{2,9}$")      # Indian 6-digit PINs ("744 103" too) and foreign postcodes
 
 
-def parse(page):
-    """[(record_id, data)] for the books on one catalogue page. Pure: test it on saved pages."""
-    out = []
-    for href, title, price, stock in BOOK.findall(page):
-        slug = href.rsplit("/", 2)[-2]
-        out.append((slug, {"title": html.unescape(title), "price": price.strip(), "availability": stock.strip(),
-                           "url": SITE + "/catalogue/" + href.lstrip("./")}))
+def text(s):
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", s))).strip()
+
+
+def is_challenge(page):
+    """True for a Cloudflare check page (non-interactive or interactive) instead of the listing."""
+    return bool(re.search(r"<title>\s*(Just a moment|Attention Required)", page)) or "challenge-platform" in page and "school-card" not in page
+
+
+def listed_total(page):
+    m = TOTAL.search(page)
+    return int(m.group(3)) if m else None
+
+
+def split_address(lines):
+    """'locality..., district,' / 'state,' / 'PIN, country' -> fields; the raw text stays in `address` too."""
+    parts = [p.strip() for p in ", ".join(lines).split(",") if p.strip()]
+    out = {"country": "", "pin": "", "state": "", "district": "", "locality": ""}
+    if parts and not PIN.match(parts[-1]):
+        out["country"] = parts.pop()
+    if parts and PIN.match(parts[-1]):
+        out["pin"] = parts.pop().replace(" ", "")
+    if parts:
+        out["state"] = parts.pop()
+    if parts:
+        out["district"] = parts.pop()
+    out["locality"] = ", ".join(parts)
     return out
 
 
+def parse(page):
+    """[(affiliation_code, data)] for the schools on one listing page. Pure: tested on saved pages."""
+    coords = {}
+    m = LOCATIONS.search(page)
+    if m:
+        for s in json.loads(m.group(1)).get("schools", []):
+            coords[s["name"].split(" - ", 1)[0].strip()] = (s.get("lat"), s.get("lng"))
+    total, out = listed_total(page), []
+    for card in CARD.findall(page):
+        h = HEAD.search(card)
+        if not h:
+            continue
+        code, name = h.group(1), text(h.group(2))
+        body = BODY.search(card)
+        principal, address_lines = "", []
+        if body:
+            first, _, rest = body.group(1).partition("<br>")
+            principal = text(first)
+            address_lines = [text(x) for x in rest.split("\n") if text(x)]
+        badges = [(c, text(t)) for c, t in BADGE.findall(card)]
+        blue = [t for c, t in badges if c == "blue"]
+        green = {t for c, t in badges if c == "green"}
+        link = SITE_LINK.search(card)
+        lat, lng = coords.get(code, (None, None))
+        out.append((code, {
+            "code": code, "name": name, "principal": principal,
+            "address": ", ".join(a.rstrip(",") for a in address_lines), **split_address(address_lines),
+            "gender": next((t for c, t in badges if c == "red"), ""),
+            "residence": next((t for t in blue if t != "ASISC"), ""),
+            "asisc": "ASISC" in blue,
+            "icse": "ICSE" in green, "isc": "ISC" in green, "cve": "CVE" in green,
+            "website": html.unescape(link.group(1)).strip() if link else "",
+            "lat": lat, "lng": lng, "listed_total": total,
+        }))
+    return out
+
+
+class Browser:
+    """One headless Chromium and one context per process (keeps the Cloudflare clearance cookie between pages)."""
+
+    def __init__(self):
+        from playwright.sync_api import sync_playwright
+        proxy = None
+        if os.environ.get("SCRAPE_PROXY"):
+            u = urlsplit(os.environ["SCRAPE_PROXY"])
+            proxy = {"server": f"http://{u.hostname}:{u.port}", "username": unquote(u.username or ""), "password": unquote(u.password or "")}
+        self.pw = sync_playwright().start()
+        self.browser = self.pw.chromium.launch(proxy=proxy)
+        self.page = self.browser.new_context(locale="en-IN").new_page()
+
+    def get(self, hub, url):
+        """(status, html). status None = no answer; 'challenge' = Cloudflare did not let the page through."""
+        t = time.time()
+        try:
+            r = self.page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            for _ in range(30):                                 # a non-interactive check reloads by itself
+                if "Just a moment" not in self.page.title():
+                    break
+                self.page.wait_for_timeout(1000)
+            page = self.page.content()
+        except Exception:
+            count_request(hub, None, time.time() - t)
+            return None, ""
+        status = r.status if r else None
+        if is_challenge(page):
+            count_request(hub, 403, time.time() - t)
+            return "challenge", page
+        count_request(hub, 200 if "school-card" in page or TOTAL.search(page) else status, time.time() - t)
+        return 200, page
+
+    def close(self):
+        self.browser.close()
+        self.pw.stop()
+
+
 def local(url):
-    hub = LocalHub()
-    page = fetch(hub, requests.Session(), url)
-    rows = parse(page) if page else []
+    hub, b = LocalHub(), Browser()
+    try:
+        status, page = b.get(hub, url)
+    finally:
+        b.close()
+    rows = parse(page) if status == 200 else []
     for rid, data in rows:
         print(json.dumps({"record_id": rid, "data": data}, ensure_ascii=False))
-    print(f"{len(rows)} records, counters {hub.counts}", file=sys.stderr)
-
-
-def fetch(hub, session, url):
-    r = timed_get(hub, session, url, timeout=30, headers={"User-Agent": UA})    # counts n_http, t_http_s, http_<code>, http_error
-    if r is None or r.status_code != 200:
-        return None
-    if not r.encoding or r.encoding.lower() == "iso-8859-1":     # no charset declared: requests guesses Latin-1; trust the content
-        r.encoding = r.apparent_encoding or "utf-8"
-    return r.text
+    title = re.search(r"<title>(.*?)</title>", page, re.S)
+    print(f"status {status}, title {text(title.group(1)) if title else ''!r}, {len(rows)} records, listed total {listed_total(page)}, counters {hub.counts}", file=sys.stderr)
 
 
 def main():
+    stop = stop_flag()
     hub = HubClient(PROJECT, job_index=int(os.environ.get("SCRAPE_JOB_INDEX", "0")), total_jobs=int(os.environ.get("SCRAPE_TOTAL_JOBS", "1")))
-    session = requests.Session()
+    b = None
     try:
-        while time.time() < DEADLINE:
+        b = Browser()
+        while time.time() < DEADLINE and not stop.is_set():
             if hub.settings.get("paused"):
-                time.sleep(30)                          # the hub holds us (site down, or the family owner paused it)
+                time.sleep(30)
                 continue
             items = hub.claim(1, steal=True, retry_failed=True)
             if not items:
-                break                                   # nothing left for this project: exit, the worker asks the hub for more
+                break
             item = items[0]
-            page = fetch(hub, session, item["payload"]["url"])
-            if page is None:
-                hub.complete([item["key"]], "failed", error="page did not load")
+            status, page = b.get(hub, item["payload"]["url"])
+            if status == "challenge":
+                hub.failure("cloudflare-challenge", item["key"], "Cloudflare challenge did not clear; not clicked", url=item["payload"]["url"])
+                hub.complete([item["key"]], "failed", error="cloudflare challenge")
+                hub.close("failed", "cloudflare challenge: stopped, no retries from this run")
+                return 3
+            if status != 200:
+                hub.complete([item["key"]], "failed", error=f"page did not load ({status})")
+                time.sleep(MIN_DELAY_S)
                 continue
             hub.upload_many([(f"pages/{item['key']}.html.gz", gzip.compress(page.encode()), "application/gzip")])
+            seen = datetime.now(timezone.utc).date().isoformat()
             rows = parse(page)
             for rid, data in rows:
-                hub.record(rid, {**data, "page": item["key"]})
+                hub.record(rid, {**data, "page": item["payload"].get("page"), "seen": seen})
             hub.complete([item["key"]], "done", fetched=len(rows))
-            time.sleep(max(0.5, hub.settings.get("delay_ms", 0) / 1000))
-        hub.close()
+            time.sleep(max(MIN_DELAY_S, hub.settings.get("delay_ms", 0) / 1000))
+        hub.close("failed", "stopped by signal") if stop.is_set() else hub.close()
     except BaseException as e:
         hub.close("failed", f"{type(e).__name__}: {e}"[:200])
         raise
+    finally:
+        if b:
+            b.close()
+    return 0
 
 
 if __name__ == "__main__":
     if sys.argv[1:2] == ["--local"]:
-        local(sys.argv[2] if len(sys.argv) > 2 else SITE + "/catalogue/page-1.html")
+        local(sys.argv[2] if len(sys.argv) > 2 else SITE + "/?page=1")
     else:
-        main()
+        sys.exit(main())

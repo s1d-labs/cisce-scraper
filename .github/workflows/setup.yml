@@ -4,6 +4,8 @@ name: setup
 # family.py. The hub trusts this repo (s1d-labs/<family>) through the GitHub OIDC token; no secrets are needed.
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "30 1 * * *"     # daily: seeds the new month's refresh keys (family.py)
 
 permissions:
   id-token: write

@@ -1,8 +1,9 @@
 {
   "family": "cisce-scraper",
-  "about": "Scrapes CISCE school directory data.",
+  "about": "CISCE affiliated schools (locate.cisce.org): code, name, principal, address, PIN, ICSE/ISC/CVE, type, coordinates.",
   "setup": [
-    "pip install -r requirements.txt"
+    "pip install -r requirements.txt",
+    "python -m playwright install --with-deps chromium"
   ],
   "tasks": {
     "crawl": [
