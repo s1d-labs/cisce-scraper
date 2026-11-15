@@ -1,6 +1,7 @@
 """The `crawl` task: CISCE affiliated schools from locate.cisce.org (10 schools per listing page).
 
 python crawl.py --local [url]   fetches one page without the hub and prints the records.
+python crawl.py --files DIR     parses listing pages saved by hand in a browser (*.html) and prints the records (no network).
 
 The site is behind Cloudflare: plain HTTP gets 403, so pages load in headless Chromium (Playwright). A non-interactive check
 clears by itself in a few seconds. An interactive challenge ("Verify you are human") is never clicked: the task records a
@@ -193,7 +194,12 @@ def main():
 
 
 if __name__ == "__main__":
-    if sys.argv[1:2] == ["--local"]:
+    if sys.argv[1:2] == ["--files"]:
+        from pathlib import Path
+        for f in sorted(Path(sys.argv[2]).glob("*.htm*")):
+            for rid, data in parse(f.read_text(encoding="utf-8", errors="replace")):
+                print(json.dumps({"record_id": rid, "data": {**data, "file": f.name}}, ensure_ascii=False))
+    elif sys.argv[1:2] == ["--local"]:
         local(sys.argv[2] if len(sys.argv) > 2 else SITE + "/?page=1")
     else:
         sys.exit(main())
