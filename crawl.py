@@ -147,7 +147,8 @@ def local(url):
     rows = parse(page) if status == 200 else []
     for rid, data in rows:
         print(json.dumps({"record_id": rid, "data": data}, ensure_ascii=False))
-    print(f"status {status}, {len(rows)} records, listed total {listed_total(page)}, counters {hub.counts}", file=sys.stderr)
+    title = re.search(r"<title>(.*?)</title>", page, re.S)
+    print(f"status {status}, title {text(title.group(1)) if title else ''!r}, {len(rows)} records, listed total {listed_total(page)}, counters {hub.counts}", file=sys.stderr)
 
 
 def main():

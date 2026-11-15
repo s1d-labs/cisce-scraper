@@ -9,8 +9,9 @@ from pathlib import Path
 
 FAMILY = json.loads((Path(__file__).parent / "scrape.json").read_text())["family"]
 SITE = "https://locate.cisce.org"
-# shortcut: pilot of 3 pages while Cloudflare access from the pool is unproven; set to 340 (336 pages + growth) after a clean pilot
-PAGES = 3
+# Paused (0 pages): on 2026-11-16 Cloudflare showed an interactive challenge to the box, to proxy in-07 and to a GitHub runner.
+# The task never clicks it. Set 3 for a pilot when trideep says so, then 340 (336 pages + growth) after a clean pilot.
+PAGES = 0
 MONTH = datetime.now(timezone.utc).strftime("%Y-%m")
 
 PROJECTS = [
