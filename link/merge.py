@@ -25,6 +25,7 @@ import crawl  # noqa: E402
 LOCATOR_DATE = os.environ.get("LOCATOR_DATE", "2026-10-20")
 FIELDS = ["code", "name", "state", "district", "locality", "address", "pin", "country", "gender", "residence", "status", "icse", "isc",
           "cve", "head", "phones", "email", "website", "lat", "lng", "first_seen", "last_seen", "on_locator_2026", "n_sources", "sources"]
+HISTORY = ["name", "district", "pin", "status", "gender", "residence", "icse", "isc", "cve"]   # per list row in cisce_presence
 STATE_FIX = {"Tamilnadu": "Tamil Nadu", "Chattisgarh": "Chhattisgarh", "New Delhi": "Delhi", "Orissa": "Odisha", "Pondicherry": "Puducherry"}
 FOREIGN = {"DUBAI": "United Arab Emirates", "SHARJAH": "United Arab Emirates", "INDONESIA": "Indonesia", "SINGAPORE": "Singapore",
            "THAILAND": "Thailand"}
@@ -43,7 +44,7 @@ def merge(d):
     presence, rows = [], collections.defaultdict(dict)       # rows[code][source_date] = data in a common shape
 
     def add(code, date, source, data):
-        presence.append({"code": code, "source": source, "date": date})
+        presence.append({"code": code, "source": source, "date": date, **{k: data.get(k, "") for k in HISTORY}})
         rows[code][date] = {k: v for k, v in data.items() if v not in ("", None, [], False)}
 
     for f in sorted(glob.glob(f"{d}/wayback_*.jsonl")):
@@ -121,13 +122,13 @@ def self_check():
     rows, pres = merge(t)
     r = rows[0]
     assert (r["name"], r["pin"], r["phones"], r["email"], r["first_seen"], r["last_seen"]) == ("New Name", "111111", "1", "a@b", "2020-01-01", "2022-01-01")
-    assert len(pres) == 2 and not r["on_locator_2026"]
+    assert len(pres) == 2 and not r["on_locator_2026"] and [p["name"] for p in pres] == ["Old Name", "New Name"]
 
 
 if __name__ == "__main__":
     self_check()
     rows, presence = merge(sys.argv[1])
     write(f"{sys.argv[1]}/cisce_all.csv", rows, FIELDS)
-    write(f"{sys.argv[1]}/cisce_presence.csv", presence, ["code", "source", "date"])
+    write(f"{sys.argv[1]}/cisce_presence.csv", presence, ["code", "source", "date", *HISTORY])
     print(len(rows), "codes;", sum(r["on_locator_2026"] for r in rows), "on the 2026 locator pages;",
           collections.Counter(r["last_seen"] for r in rows).most_common(6))
