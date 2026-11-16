@@ -1,6 +1,7 @@
 #!/bin/bash
 # Load the CISCE lists and links into ws_trideep.cisce_scraper (Metabase: "Workspace: trideep"). Run on a team box.
-# usage: python link/merge.py <dir>; cp <dir>/cisce_all.csv <dir>/cisce.csv; python link/link.py <dir> udise_all.csv;
+# usage: psql -d udise -c "copy (select pincode, district from directory.pincodes) to stdout with csv header" > <dir>/pincodes.csv
+#        python link/merge.py <dir>; cp <dir>/cisce_all.csv <dir>/cisce.csv; python link/link.py <dir> udise_all.csv;
 #        (cd link && python link_2021.py <dir>); link/load.sh <dir>
 # <dir> holds the CSVs that merge.py and link.py read and write (see their docstrings), plus udise_cisce.csv
 set -euo pipefail

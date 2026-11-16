@@ -6,6 +6,7 @@ python link/merge.py <dir>
          <dir>/locator-<date>-<src>/* more listing pages, e.g. locator-2026-07-23-devlocate-wayback, locator-2026-11-20-saved-by-hand
                                       (.html, .gz, or cisce-pages-*.json bundles from saver.js)
          <dir>/cisce_2018.csv          github.com/deedy/cisce_schools_data (code, name, address, pin, state)
+         <dir>/pincodes.csv            optional: pincode, district (udise db, directory.pincodes) for rows with no district
          <dir>/cisce_2021.csv          github.com/Nitish-Kumar-kushwaha/list-of-all-CISCE-schools-in-India (code, name_and_place, phone)
   writes <dir>/cisce_all.csv           one row per code
          <dir>/cisce_presence.csv      code, source, date: which list showed the code when
@@ -27,7 +28,7 @@ LOCATOR_DATE = os.environ.get("LOCATOR_DATE", "2026-10-20")
 FIELDS = ["code", "name", "state", "district", "locality", "address", "pin", "country", "gender", "residence", "status", "icse", "isc",
           "cve", "head", "phones", "email", "website", "lat", "lng", "first_seen", "last_seen", "on_locator_2026", "n_sources", "sources"]
 HISTORY = ["name", "district", "pin", "status", "gender", "residence", "icse", "isc", "cve"]   # per list row in cisce_presence
-STATE_FIX = {"Tamilnadu": "Tamil Nadu", "Chattisgarh": "Chhattisgarh", "New Delhi": "Delhi", "Orissa": "Odisha", "Pondicherry": "Puducherry"}
+STATE_FIX = {"Dubai (U.A.E.)": "Dubai", "Tamilnadu": "Tamil Nadu", "Chattisgarh": "Chhattisgarh", "New Delhi": "Delhi", "Orissa": "Odisha", "Pondicherry": "Puducherry"}
 FOREIGN = {"DUBAI": "United Arab Emirates", "SHARJAH": "United Arab Emirates", "INDONESIA": "Indonesia", "SINGAPORE": "Singapore",
            "THAILAND": "Thailand"}
 
@@ -78,6 +79,10 @@ def merge(d):
             name21[r["code"]] = r["name_and_place"]                 # name and place in one text: used only when no name is known
             add(r["code"], "2021-08-30", "github-nitish-2021", {"phones": r["phone"]})
 
+    pin_district = {}                         # <dir>/pincodes.csv (pincode, district): UDISE+ directory.pincodes, optional
+    if os.path.exists(f"{d}/pincodes.csv"):
+        pin_district = {r["pincode"]: r["district"].title() for r in csv.DictReader(open(f"{d}/pincodes.csv")) if r["district"]}
+
     # state for rows without one: the 2018 list, else the most common state of the code prefix
     pref = collections.defaultdict(collections.Counter)
     for code, by_date in rows.items():
@@ -99,6 +104,8 @@ def merge(d):
         row["state"] = STATE_FIX.get(row["state"], row["state"])
         row["country"] = row.get("country") or FOREIGN.get(row["state"].upper(), "India")
         row["name"] = row.get("name") or name21.get(code, "")
+        if not row.get("district") and row.get("pin") in pin_district:     # the 2025 table layout has no district field
+            row["district"] = pin_district[row["pin"]]
         out.append({**{k: row.get(k, "") for k in FIELDS}, "code": code, "first_seen": dates[0], "last_seen": dates[-1],
                     "on_locator_2026": LOCATOR_DATE in by_date, "n_sources": len(dates)})
     by_code = collections.defaultdict(set)
