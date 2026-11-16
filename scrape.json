@@ -9,6 +9,11 @@
     "crawl": [
       "python",
       "crawl.py"
+    ],
+    "history": [
+      "python",
+      "wayback.py",
+      "--task"
     ]
   }
 }
