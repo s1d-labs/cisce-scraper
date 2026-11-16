@@ -1,0 +1,11 @@
+20151231094309 http://www.cisce.org:80/locate-search.aspx?
+20160120031615 http://www.cisce.org:80/locate-search.aspx?
+20161127070124 http://cisce.org:80/locate-search.aspx?
+20170109161211 http://www.cisce.org:80/locate-search.aspx?country=0&state=0&dist=0&city=0&location=&schooltype=&cve=&isc=&icse=&schoolclassi=&school=&search=locate
+20171230084929 http://www.cisce.org:80/locate-search.aspx
+20180109031828 http://www.cisce.org:80/locate-search.aspx?
+20181228065124 http://cisce.org:80/locate-search.aspx
+20190102153835 http://www.cisce.org:80/locate-search.aspx
+20190216072729 http://www.cisce.org:80/locate-search.aspx?
+20200226201818 https://www.cisce.org/locate-search.aspx?country=0&state=0&dist=0&city=0&location=&schooltype=&cve=&isc=&icse=&schoolclassi=&school=&search=locate
+20220419213437 https://www.cisce.org/locate-search.aspx?country=0&state=0&dist=0&city=0&location=&schooltype=&cve=&isc=&icse=&schoolclassi=&school=&search=locate

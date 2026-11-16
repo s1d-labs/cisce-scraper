@@ -32,10 +32,11 @@ jobs:
           cat reach.log
           n=$(wc -l < reach.jsonl)
           echo "records=$n" >> "$GITHUB_OUTPUT"
-          [ "$n" -gt 0 ] || echo "::warning::locate.cisce.org did not let the runner through (Cloudflare challenge?): scrape-check skipped"
-      - name: scrape-check (local stand-in hub, 2 real items)
-        if: steps.reach.outputs.records != '0'
-        run: scrape-check --items 2
+          [ "$n" -gt 0 ] || echo "::warning::locate.cisce.org did not let the runner through (Cloudflare challenge?)"
+      - name: scrape-check, history task (local stand-in hub, 2 cached locator pages)
+        run: scrape-check --items 2 --project cisce-scraper-locator-cache
+      # the locator project has no queue items while Cloudflare blocks it (family.py PAGES = 0): add
+      # `scrape-check --items 2 --project cisce-scraper-schools` here again when PAGES > 0
       - uses: actions/upload-artifact@v6
         if: ${{ always() }}
         with:

@@ -50,7 +50,7 @@ def listed_total(page):
 
 def split_address(lines):
     """'locality..., district,' / 'state,' / 'PIN, country' -> fields; the raw text stays in `address` too."""
-    parts = [p.strip() for p in ", ".join(lines).split(",") if p.strip()]
+    parts = [p.strip(" .-") for p in ", ".join(lines).split(",") if p.strip(" .-")]   # "562127." and "-208020" occur
     out = {"country": "", "pin": "", "state": "", "district": "", "locality": ""}
     if parts and not PIN.match(parts[-1]):
         out["country"] = parts.pop()
