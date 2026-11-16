@@ -4,6 +4,7 @@ python link/merge.py <dir>
   reads  <dir>/wayback_<ts>.jsonl      old official locator, Wayback copies (wayback.py), full lists 2015-2022
          <dir>/locator/*              locate.cisce.org listing pages of LOCATOR_DATE (magesh-xseed/milestones raw cache)
          <dir>/locator-<date>-<src>/* more listing pages, e.g. locator-2026-07-23-devlocate-wayback, locator-2026-11-20-saved-by-hand
+                                      (.html, .gz, or cisce-pages-*.json bundles from saver.js)
          <dir>/cisce_2018.csv          github.com/deedy/cisce_schools_data (code, name, address, pin, state)
          <dir>/cisce_2021.csv          github.com/Nitish-Kumar-kushwaha/list-of-all-CISCE-schools-in-India (code, name_and_place, phone)
   writes <dir>/cisce_all.csv           one row per code
@@ -58,11 +59,13 @@ def merge(d):
         m = re.search(r"locator-(\d{4}-\d{2}-\d{2})(?:-(.+?))?/$", folder)
         date, source = (m.group(1), m.group(2) or "locate.cisce.org") if m else (LOCATOR_DATE, "locate.cisce.org")
         for f in sorted(glob.glob(f"{folder}*")):
-            page = read_page(f)
-            if crawl.is_challenge(page):
-                continue
-            for code, r in crawl.parse(page):
-                add(code, date, source, {**r, "head": r["principal"]})
+            # cisce-pages-*.json: pages saved by saver.js (github.com/insightLegion/cisce-locator-saver), {"page-0001.html": html}
+            pages = json.load(open(f, encoding="utf-8")).values() if f.endswith(".json") else [read_page(f)]
+            for page in pages:
+                if crawl.is_challenge(page):
+                    continue
+                for code, r in crawl.parse(page):
+                    add(code, date, source, {**r, "head": r["principal"]})
     state18 = {}
     if os.path.exists(f"{d}/cisce_2018.csv"):
         for r in csv.DictReader(open(f"{d}/cisce_2018.csv")):
@@ -123,6 +126,11 @@ def self_check():
     r = rows[0]
     assert (r["name"], r["pin"], r["phones"], r["email"], r["first_seen"], r["last_seen"]) == ("New Name", "111111", "1", "a@b", "2020-01-01", "2022-01-01")
     assert len(pres) == 2 and not r["on_locator_2026"] and [p["name"] for p in pres] == ["Old Name", "New Name"]
+    page = open(os.path.join(os.path.dirname(__file__), "..", "tests", "pages", "result-isc-india-p1.html"), encoding="utf-8").read()
+    os.makedirs(f"{t}/locator-2026-11-20-saved-by-hand")
+    json.dump({"page-0001.html": page}, open(f"{t}/locator-2026-11-20-saved-by-hand/cisce-pages-0001-0001.json", "w"))
+    rows, pres = merge(t)
+    assert len(rows) == 11 and {p["source"] for p in pres} >= {"saved-by-hand"}
 
 
 if __name__ == "__main__":
