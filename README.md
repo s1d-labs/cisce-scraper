@@ -1,12 +1,30 @@
 # cisce-scraper
 
-The list of CISCE affiliated schools from [locate.cisce.org](https://locate.cisce.org/), for the s1d-labs scrape pool.
+The list of CISCE affiliated schools for the s1d-labs scrape pool, from every public source we found.
 
-- Project `cisce-scraper-schools`: one queue item per listing page and month (`<YYYY-MM>-p<n>`), 10 schools per page.
-- Record id: the CISCE affiliation code (for example `AN001`). Fields: name, principal, address, locality, district, state, PIN,
-  country, ICSE / ISC / CVE, gender, residence type, ASISC member, website, coordinates, `listed_total`, `page`, `seen`.
-- The site is behind Cloudflare. The task uses headless Chromium (Playwright). It does not click a challenge: on an interactive
-  challenge it records a `cloudflare-challenge` failure and stops.
+## Projects (scrape hub)
+
+| Project | Task | Source | State |
+|---|---|---|---|
+| `cisce-scraper-schools` | `crawl` | [locate.cisce.org](https://locate.cisce.org/), the official locator, 10 schools per page | paused: Cloudflare shows an interactive check to automated browsers (`family.py` `PAGES = 0`) |
+| `cisce-scraper-wayback` | `history` | full lists of the old official locator (www.cisce.org/locate-search.aspx), Wayback Machine copies 2015-2022 | 11 lists |
+| `cisce-scraper-locator-cache` | `history` | locate.cisce.org pages of 2026-10-20 from a public raw cache (see credits) | 169 pages |
+
+Record id: the affiliation code (`crawl`), or `<date>:<code>` (`history`, one record per list).
+
+## Merge and links
+
+`link/merge.py` gives one row per affiliation code from all sources; `link/link.py` links codes to UDISE+ and to the CBSE list;
+`link/load.sh` loads the result into a team workspace database. See the docstrings.
+
+## Credits
+
+- [Internet Archive Wayback Machine](https://web.archive.org/): copies of www.cisce.org/locate-search.aspx, 2015-2022.
+- [magesh-xseed/milestones](https://github.com/magesh-xseed/milestones): raw cache of locate.cisce.org pages, fetched 2026-10-20.
+- [deedy/cisce_schools_data](https://github.com/deedy/cisce_schools_data): CISCE school list of 2018 (2,341 schools).
+- [Nitish-Kumar-kushwaha/list-of-all-CISCE-schools-in-India](https://github.com/Nitish-Kumar-kushwaha/list-of-all-CISCE-schools-in-India): list of 2021.
+- [Ayushmaan06/school](https://github.com/Ayushmaan06/school): a saved locate.cisce.org result page, used as a test fixture.
+- [Baalaaji1/ICSE-Schools-data](https://github.com/Baalaaji1/ICSE-Schools-data): list of 2019 (not used: the Wayback copies of 2019 hold the same list).
 
 ## Check
 
@@ -14,8 +32,6 @@ The list of CISCE affiliated schools from [locate.cisce.org](https://locate.cisc
 pip install -r requirements.txt pytest "scrape-hub-client @ git+https://github.com/s1d-labs/runner@sdk-stable#subdirectory=sdk"
 python -m playwright install chromium
 python -m pytest tests -q                         # parsing, no network
-python crawl.py --local "https://locate.cisce.org/?page=1"
+scrape-check --items 2 --project cisce-scraper-locator-cache
+python crawl.py --files DIR                       # listing pages saved by hand in a browser
 ```
-
-The **check** workflow runs the tests, a reachability step from the GitHub runner, and `scrape-check --items 2` when the runner
-gets through.
