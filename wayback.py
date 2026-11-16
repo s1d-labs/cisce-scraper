@@ -59,6 +59,7 @@ def sources():
     wb = [line.split() for line in open(f"{base}/wayback-full-lists.txt") if line.strip()]
     cache = [line.strip() for line in open(f"{base}/locator-2026-10-20-magesh-xseed.txt") if line.strip()]
     dev = [line.split() for line in open(f"{base}/devlocate-wayback.txt") if line.strip()]
+    full = [line.split() for line in open(f"{base}/locator-wayback.txt") if line.strip()]
     return {
         "wayback": [{"key": ts, "payload": {"url": f"https://web.archive.org/web/{ts}id_/{url}", "kind": "old", "expected": 2500,
                                              "date": f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}", "source": "web.archive.org copy of " + url}}
@@ -66,7 +67,11 @@ def sources():
             # devlocate.cisce.org (a copy of the locator, now 403 for visitors): Wayback copies of its listing pages, 2026
             {"key": f"dev-{ts}-{url.rsplit('=', 1)[-1] if '=' in url else '1'}", "payload": {
                 "url": f"https://web.archive.org/web/{ts}id_/{url}", "kind": "new", "expected": 10,
-                "date": f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}", "source": "web.archive.org copy of " + url}} for ts, url in dev],
+                "date": f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}", "source": "web.archive.org copy of " + url}} for ts, url in dev] + [
+            # locate.cisce.org/result with no filter: every school on one page (found 2026-11-17; 3,221 schools on 2025-11-02)
+            {"key": f"locator-{ts}", "payload": {
+                "url": f"https://web.archive.org/web/{ts}id_/{url}", "kind": "new", "expected": 3200,
+                "date": f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}", "source": "web.archive.org copy of " + url}} for ts, url in full],
         "locator-cache": [{"key": u.rsplit("/", 1)[1].split(".")[0][:16], "payload": {
             "url": u, "kind": "new", "expected": 10, "date": "2026-10-20",
             "source": "locate.cisce.org page cached by github.com/magesh-xseed/milestones"}} for u in cache],

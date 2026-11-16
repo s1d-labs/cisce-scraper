@@ -53,3 +53,14 @@ def test_wayback_old_locator_rows():
     assert (s["gender"], s["residence"], s["status"], s["icse"], s["isc"]) == ("Co-ed.", "D/R", "Permanent", True, False)
     assert s["phones"] == ["8019030155", "08856-238726"] and s["email"] == ["head@ap001cisce.org"] and s["head"] == "Mrs. Mercy Nelson Panga"
     assert rows["AN001"]["status"] == "Provisional" and rows["AN001"]["isc"]
+
+
+def test_locator_table_layout_2025():
+    """locate.cisce.org/result of 2025-11-02 (Wayback): the older table layout, every school on one page."""
+    rows = dict(crawl.parse((PAGES / "locate-result-table-2025-excerpt.html").read_text(encoding="utf-8")))
+    assert sorted(rows) == ["AN001", "AP001", "DU001", "PU100"]
+    r = rows["PU100"]
+    assert (r["name"], r["state"], r["pin"], r["country"], r["residence"]) == ("International Fateh Academy", "Punjab", "143115", "India", "Day/Boarding")
+    assert r["icse"] and r["isc"] and not r["cve"] and r["website"] == "fatehacademy.com"
+    assert r["phones"] == "9888774026; 9501108834" and r["email"].startswith("Head.PU100@")
+    assert rows["DU001"]["country"] == "United Arab Emirates"

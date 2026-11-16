@@ -64,8 +64,47 @@ def split_address(lines):
     return out
 
 
+ROW = re.compile(r'<tr>\s*<td>\s*<ul>\s*<li><b>([A-Z]{2,4}\d+)</b></li>(.*?)</tr>', re.S)   # the 2023-2025 table layout
+LI = re.compile(r"<li>(.*?)</li>", re.S)
+STATE_PIN = re.compile(r"^(.*?)\s*-\s*([\d ]{3,9})$")
+
+
+def parse_table(page):
+    """The older layout of locate.cisce.org (2023-2025, `/result` with no filter = every school on one page): one <tr> per
+    school; cells: code, name, address lines, "State - PIN", country | phone (in an HTML comment), fax, e-mail, website |
+    gender, residence, ASISC | ICSE/ISC/CVE | head. District is not marked: the last address line (a town) goes to locality."""
+    out = []
+    for code, rest in ROW.findall(page):
+        cells = re.split(r"</td>\s*<td>", rest)
+        if len(cells) < 5:
+            continue
+        first = [text(x) for x in LI.findall(cells[0])]
+        name, country = first[0], first[-1]
+        sp = STATE_PIN.match(first[-2]) if len(first) > 2 else None
+        lines = [x for x in first[1:-2] if x]
+        contact = cells[1]
+        field = lambda label: text(m.group(1)) if (m := re.search(rf"<b>{label}</b>\s*:-?\s*(?:<br\s*/?>)?(.*?)</li>", contact, re.S)) else ""  # noqa: E731
+        site = re.search(r'<span id="\d+">(.*?)</span>', contact, re.S)
+        kind = [text(x) for x in LI.findall(cells[2])]
+        subj = {text(x) for x in LI.findall(cells[3])}
+        out.append((code, {
+            "code": code, "name": name, "principal": text(" ".join(LI.findall(cells[4]))),
+            "address": ", ".join(x for x in first[1:] if x), "country": country,
+            "state": sp.group(1).strip() if sp else "", "pin": sp.group(2).replace(" ", "") if sp else "",
+            "district": "", "locality": ", ".join(lines),
+            "phones": "; ".join(x.strip() for x in field("Phone").split(",") if x.strip()),
+            "email": "; ".join(x.strip() for x in field("Email").split(",") if x.strip()),
+            "gender": kind[0] if kind else "", "residence": kind[1] if len(kind) > 1 else "", "asisc": "ASISC" in kind,
+            "icse": "ICSE" in subj, "isc": "ISC" in subj, "cve": "CVE" in subj,
+            "website": text(site.group(1)) if site else "", "lat": None, "lng": None, "listed_total": None,
+        }))
+    return out
+
+
 def parse(page):
     """[(affiliation_code, data)] for the schools on one listing page. Pure: tested on saved pages."""
+    if '<div class="school-card">' not in page:
+        return parse_table(page)
     coords = {}
     m = LOCATIONS.search(page)
     if m:
