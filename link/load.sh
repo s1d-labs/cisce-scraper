@@ -25,8 +25,9 @@ q "drop table if exists cisce_scraper.cisce_all; create table cisce_scraper.cisc
    locality text, address text, pin text, country text, gender text, residence text, status text, icse bool, isc bool, cve bool, head text,
    phones text, email text, website text, lat float8, lng float8, first_seen date, last_seen date, on_locator_2026 bool, n_sources int, sources text)"
 q "comment on table cisce_scraper.cisce_all is 'Every CISCE code seen 2015-2026 (link/merge.py): Wayback copies of www.cisce.org/locate-search.aspx, locate.cisce.org pages of 2026-10-20 (raw cache of github.com/magesh-xseed/milestones), lists of github.com/deedy and github.com/Nitish-Kumar-kushwaha. Newest source wins per field'"
-q "create table if not exists cisce_scraper.cisce_presence (code text, source text, date date)"
-q "comment on table cisce_scraper.cisce_presence is 'Which list showed which CISCE code on which date (full lists: wayback-cisce.org; partial: locate.cisce.org 2026)'"
+q "drop table if exists cisce_scraper.cisce_presence; create table cisce_scraper.cisce_presence (code text, source text, date date,
+   name text, district text, pin text, status text, gender text, residence text, icse bool, isc bool, cve bool)"
+q "comment on table cisce_scraper.cisce_presence is 'Which list showed which CISCE code on which date, with the name, PIN, status and subjects on that list (full lists: wayback-cisce.org; partial: locate.cisce.org 2026, github lists)'"
 
 load udise_cisce udise_cisce.csv
 load cisce_all cisce_all.csv
