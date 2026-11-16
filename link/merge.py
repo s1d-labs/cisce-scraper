@@ -2,7 +2,8 @@
 
 python link/merge.py <dir>
   reads  <dir>/wayback_<ts>.jsonl      old official locator, Wayback copies (wayback.py), full lists 2015-2022
-         <dir>/locator/*              locate.cisce.org listing pages (2026: magesh-xseed/milestones raw cache, or saved by hand)
+         <dir>/locator/*              locate.cisce.org listing pages of LOCATOR_DATE (magesh-xseed/milestones raw cache)
+         <dir>/locator-<date>-<src>/* more listing pages, e.g. locator-2026-07-23-devlocate-wayback, locator-2026-11-20-saved-by-hand
          <dir>/cisce_2018.csv          github.com/deedy/cisce_schools_data (code, name, address, pin, state)
          <dir>/cisce_2021.csv          github.com/Nitish-Kumar-kushwaha/list-of-all-CISCE-schools-in-India (code, name_and_place, phone)
   writes <dir>/cisce_all.csv           one row per code
@@ -35,7 +36,7 @@ def prefix(code):
 
 def read_page(path):
     b = open(path, "rb").read()
-    return (gzip.decompress(b) if path.endswith(".gz") else b).decode("utf-8", "replace")
+    return (gzip.decompress(b) if b[:2] == b"\x1f\x8b" else b).decode("utf-8", "replace")
 
 
 def merge(d):
@@ -52,12 +53,15 @@ def merge(d):
             r = json.loads(line)
             add(r["code"], date, "wayback-cisce.org", {**r, "phones": "; ".join(r["phones"]), "email": "; ".join(r["email"]),
                                                         "website": "; ".join(r["domain"])})
-    for f in sorted(glob.glob(f"{d}/locator/*")):
-        page = read_page(f)
-        if crawl.is_challenge(page):
-            continue
-        for code, r in crawl.parse(page):
-            add(code, LOCATOR_DATE, "locate.cisce.org", {**r, "head": r["principal"]})
+    for folder in sorted(glob.glob(f"{d}/locator*/")):       # locator/ (LOCATOR_DATE) or locator-<YYYY-MM-DD>[-<source>]/
+        m = re.search(r"locator-(\d{4}-\d{2}-\d{2})(?:-(.+?))?/$", folder)
+        date, source = (m.group(1), m.group(2) or "locate.cisce.org") if m else (LOCATOR_DATE, "locate.cisce.org")
+        for f in sorted(glob.glob(f"{folder}*")):
+            page = read_page(f)
+            if crawl.is_challenge(page):
+                continue
+            for code, r in crawl.parse(page):
+                add(code, date, source, {**r, "head": r["principal"]})
     state18 = {}
     if os.path.exists(f"{d}/cisce_2018.csv"):
         for r in csv.DictReader(open(f"{d}/cisce_2018.csv")):

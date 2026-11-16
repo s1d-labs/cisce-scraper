@@ -2,7 +2,7 @@
 # Load the CISCE lists and links into ws_trideep.cisce_scraper (Metabase: "Workspace: trideep"). Run on a team box.
 # usage: python link/merge.py <dir>; cp <dir>/cisce_all.csv <dir>/cisce.csv; python link/link.py <dir> udise_all.csv;
 #        (cd link && python link_2021.py <dir>); link/load.sh <dir>
-# <dir> holds the CSVs that merge.py and link.py read and write (see their docstrings), plus udise_cisce.csv and cbse.csv
+# <dir> holds the CSVs that merge.py and link.py read and write (see their docstrings), plus udise_cisce.csv
 set -euo pipefail
 D=$1
 q() { psql -d ws_trideep -v ON_ERROR_STOP=1 -qc "$1"; }
@@ -27,8 +27,6 @@ q "drop table if exists cisce_scraper.cisce_all; create table cisce_scraper.cisc
 q "comment on table cisce_scraper.cisce_all is 'Every CISCE code seen 2015-2026 (link/merge.py): Wayback copies of www.cisce.org/locate-search.aspx, locate.cisce.org pages of 2026-10-20 (raw cache of github.com/magesh-xseed/milestones), lists of github.com/deedy and github.com/Nitish-Kumar-kushwaha. Newest source wins per field'"
 q "create table if not exists cisce_scraper.cisce_presence (code text, source text, date date)"
 q "comment on table cisce_scraper.cisce_presence is 'Which list showed which CISCE code on which date (full lists: wayback-cisce.org; partial: locate.cisce.org 2026)'"
-q "create table if not exists cisce_scraper.link_cisce_cbse (udise text, cbse_aff_no text, cbse_name text, score float8, evidence text)"
-q "comment on table cisce_scraper.link_cisce_cbse is 'UDISE CISCE schools with the same name in the same district on the CBSE list (cbse-schools); name+district alone may be another campus'"
 
 load udise_cisce udise_cisce.csv
 load cisce_all cisce_all.csv
@@ -49,8 +47,7 @@ q "comment on view cisce_scraper.schools_full is 'One row per CISCE code with it
 q "create view cisce_scraper.udise_without_code as select u.* from cisce_scraper.udise_cisce u
    where not exists (select 1 from cisce_scraper.link_cisce_udise l where l.udise = u.udise)"
 q "comment on view cisce_scraper.udise_without_code is 'UDISE+ schools with board ICSE/ISC that no CISCE code links to (new schools, other names, or a wrong board field)'"
-load link_cisce_cbse cisce_cbse_link.csv
 psql -d ws_trideep -Atc "select 'udise_cisce', count(*) from cisce_scraper.udise_cisce union all select 'cisce_2018', count(*) from cisce_scraper.cisce_2018
   union all select 'cisce_2021', count(*) from cisce_scraper.cisce_2021 union all select 'link_cisce_udise', count(*) from cisce_scraper.link_cisce_udise
-  union all select 'link_cisce_cbse', count(*) from cisce_scraper.link_cisce_cbse union all select 'cisce_all', count(*) from cisce_scraper.cisce_all
+  union all select 'cisce_all', count(*) from cisce_scraper.cisce_all
   union all select 'udise_without_code', count(*) from cisce_scraper.udise_without_code"
