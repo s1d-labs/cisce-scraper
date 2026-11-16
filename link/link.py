@@ -1,7 +1,7 @@
-"""Link CISCE school lists to UDISE+ (and to the CBSE list). Run on a team box; writes CSVs for ws_trideep.cisce_scraper.
+"""Link CISCE school lists to UDISE+. Run on a team box; writes CSVs for ws_trideep.cisce_scraper.
 
-python link/link.py <dir> [udise_all.csv]   reads <dir>/udise_cisce.csv, cisce.csv (code, name, address, pin, state, district), cbse.csv
-                            writes <dir>/cisce_udise_link.csv and <dir>/cisce_cbse_link.csv
+python link/link.py <dir> [udise_all.csv]   reads <dir>/udise_cisce.csv, cisce.csv (code, name, address, pin, state, district)
+                            writes <dir>/cisce_udise_link.csv
 
 Method (kept in the `method` column):
   pin+name     same PIN, normalised names equal or similarity >= 0.85
@@ -81,24 +81,6 @@ def link(cisce, udise):
     return out
 
 
-def link_cbse(udise, cbse):
-    """UDISE CISCE schools that also appear on the CBSE list: same state + district, names equal or similarity >= 0.92.
-    `evidence` name+district+pin when the CBSE address holds the UDISE PIN; name+district alone may be another campus of a chain."""
-    by_dist = defaultdict(list)
-    for b in cbse:
-        by_dist[(state(b["state"]), norm(b["district"]))].append(b)
-    out = []
-    for u in udise:
-        best = max(((score(u["name"], b["name"]), b) for b in by_dist.get((state(u["state"]), norm(u["district"])), [])),
-                   key=lambda x: x[0], default=(0, None))
-        if best[0] >= 0.92 and len(words(u["name"]) & words(best[1]["name"])) >= 1:
-            pin = (u.get("pincode") or "").strip()
-            same_pin = bool(pin) and pin in re.sub(r"(\d{3})\s(\d{3})", r"\1\2", best[1]["address"] or "")
-            out.append({"udise": u["udise"], "cbse_aff_no": best[1]["record_id"], "cbse_name": best[1]["name"], "score": round(best[0], 3),
-                        "evidence": "name+district+pin" if same_pin else "name+district"})
-    return out
-
-
 def self_check():
     assert key("St. George's Grammar School") == key("SAINT GEORGES GRAMMAR SCHOOL")
     assert key("St.Anne's School") == key("ST ANNES SCHOOL") and key("R.V.S. School") == key("RVS SCHOOL")
@@ -120,7 +102,6 @@ if __name__ == "__main__":
     d = sys.argv[1]
     udise = list(csv.DictReader(open(f"{d}/udise_cisce.csv")))
     cisce = list(csv.DictReader(open(f"{d}/cisce.csv")))
-    cbse = list(csv.DictReader(open(f"{d}/cbse.csv")))
     links = link(cisce, udise)
     if len(sys.argv) > 2:                    # second pass: all UDISE schools at the PINs still unmatched (board field may be wrong)
         done = {x["code"] for x in links} | {x["udise"] for x in links}
@@ -130,7 +111,6 @@ if __name__ == "__main__":
         # contains / fuzzy across all boards gave wrong links in a 40-link sample: keep only name and prefix matches there
         links += [{**x, "method": x["method"] + "/any-board"} for x in link(rest, more) if x["method"] in ("pin+name", "pin+prefix")]
     write(f"{d}/cisce_udise_link.csv", links)
-    write(f"{d}/cisce_cbse_link.csv", link_cbse(udise, cbse))
     india = [c for c in cisce if c.get("country", "India") in ("India", "")]
     print(f"CISCE {len(cisce)} (India {len(india)}), UDISE CISCE {len(udise)}, linked {len(links)}",
           {m: sum(1 for x in links if x["method"] == m) for m in sorted({x["method"] for x in links})})

@@ -14,7 +14,7 @@ Record id: the affiliation code (`crawl`), or `<date>:<code>` (`history`, one re
 
 ## Merge and links
 
-`link/merge.py` gives one row per affiliation code from all sources; `link/link.py` links codes to UDISE+ and to the CBSE list;
+`link/merge.py` gives one row per affiliation code from all sources; `link/link.py` links codes to UDISE+;
 `link/load.sh` loads the result into a team workspace database. See the docstrings.
 
 ## Credits
