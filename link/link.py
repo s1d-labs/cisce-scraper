@@ -108,6 +108,27 @@ def link_pin_unique(cisce, udise):
     return out
 
 
+def link_pin3(cisce, udise):
+    """Last pass: the two sources often give different PINs of the same town (Rishi Valley School 517350 / 517352).
+    Same state, same first 3 PIN digits (postal district), a close name (exact key, or score >= 0.85 with a shared
+    distinctive word), and the pair is the only candidate on both sides."""
+    cand = defaultdict(list)
+    for c in cisce:
+        for u in udise:
+            if not c["pin"] or (u["pincode"] or "")[:3] != c["pin"][:3] or state(c["state"]) != state(u["state"]):
+                continue
+            sc = score(c["name"], u["name"])
+            place = " ".join([c.get("district", ""), c.get("locality", ""), u.get("district", ""), u.get("block", "")])
+            if sc == 1.0 or (sc >= 0.85 and stems(c["name"], place) & stems(u["name"], place)):
+                cand[c["code"]].append((u["udise"], sc))
+    per_u = defaultdict(int)
+    for lst in cand.values():
+        for ud, _ in lst:
+            per_u[ud] += 1
+    return [{"code": code, "udise": lst[0][0], "method": "pin3+name", "score": round(lst[0][1], 3)}
+            for code, lst in cand.items() if len(lst) == 1 and per_u[lst[0][0]] == 1]
+
+
 def self_check():
     assert key("St. George's Grammar School") == key("SAINT GEORGES GRAMMAR SCHOOL")
     assert key("St.Anne's School") == key("ST ANNES SCHOOL") and key("R.V.S. School") == key("RVS SCHOOL")
@@ -123,6 +144,11 @@ def self_check():
                           [pu("u1", "ST. XAVIER SR SEC SCHOOL", "1", "X"), pu("u2", "ESCORT JUNIOR COLLEGE DEWAS", "2", "DEWAS"),
                            pu("u3", "PODAR INTERNATIONAL SCHOOL", "3", "Y"), pu("u5", "TANDON INTERNATIONAL SCHOOL", "5", "V"), pu("u4", "A SCHOOL", "4", "Z")])
     assert [x["code"] for x in got] == ["PU051"], got
+    c3 = [{"code": "AP038", "name": "Rishi Valley School", "pin": "517352", "state": "Andhra Pradesh", "district": "Chittoor", "locality": ""},
+          {"code": "WB110", "name": "St. Joseph's School", "pin": "734007", "state": "West Bengal", "district": "Darjeeling", "locality": ""}]
+    u3 = [{"udise": "u1", "name": "RISHI VALLEY SCHOOL", "pincode": "517350", "state": "ANDHRA PRADESH", "district": "CHITTOOR", "block": ""},
+          {"udise": "u2", "name": "ST STEPHEN'S SCHOOL", "pincode": "734201", "state": "WEST BENGAL", "district": "DARJEELING", "block": ""}]
+    assert [x["code"] for x in link_pin3(c3, u3)] == ["AP038"]
 
 
 def write(path, rows):
@@ -139,6 +165,8 @@ if __name__ == "__main__":
     links = link(cisce, udise)
     done = {x["code"] for x in links} | {x["udise"] for x in links}
     links += link_pin_unique([c for c in cisce if c["code"] not in done], [u for u in udise if u["udise"] not in done])
+    done = {x["code"] for x in links} | {x["udise"] for x in links}
+    links += link_pin3([c for c in cisce if c["code"] not in done], [u for u in udise if u["udise"] not in done])
     if len(sys.argv) > 2:                   # second pass: all UDISE schools at the PINs still unmatched (board field may be wrong)
         done = {x["code"] for x in links} | {x["udise"] for x in links}
         rest = [c for c in cisce if c["code"] not in done]
