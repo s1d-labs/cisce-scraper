@@ -8,7 +8,7 @@ Method (kept in the `method` column):
   pin+prefix   same PIN, the UDISE name starts with the CISCE name (UDISE adds the place)
   pin+contains same PIN, every distinctive CISCE name word is in the UDISE name
   pin+fuzzy    same PIN, similarity >= 0.6 and at least 2 shared name words that are not generic
-  dist+name    same state and district, normalised names equal (PIN missing or different)
+  dist+name    same state and district, normalised names equal and unique in that district on both sides (PIN differs)
 Each UDISE school links to one CISCE school at most (best score first).
 """
 import csv
@@ -53,13 +53,15 @@ def link(cisce, udise):
     for u in udise:
         by_pin[(u["pincode"] or "").strip()].append(u)
         by_dist[(state(u["state"]), norm(u["district"]))].append(u)
-    cands = []
+    cands, cisce_names = [], defaultdict(int)
+    for c in cisce:
+        cisce_names[(state(c["state"]), norm(c["district"]), key(c["name"]))] += 1
     for c in cisce:
         for u in by_pin.get(c["pin"], []) if c["pin"] else []:
             sc = score(c["name"], u["name"])
             shared = len(words(c["name"]) & words(u["name"]))
             cw, uw = words(c["name"]), words(u["name"])
-            if sc >= 0.85:
+            if sc == 1.0 or (sc >= 0.85 and cw & uw):           # "Gems Public School" ~ "SL Public School" is 0.87: need a shared word
                 cands.append((sc + 1, c["code"], u["udise"], "pin+name", round(sc, 3)))
             elif key(u["name"]).startswith(key(c["name"])) and len(key(c["name"])) >= 6:
                 cands.append((1.8, c["code"], u["udise"], "pin+prefix", round(sc, 3)))
@@ -67,9 +69,9 @@ def link(cisce, udise):
                 cands.append((1.5 + sc / 10, c["code"], u["udise"], "pin+contains", round(sc, 3)))
             elif sc >= 0.6 and shared >= 2:
                 cands.append((sc, c["code"], u["udise"], "pin+fuzzy", round(sc, 3)))
-        for u in by_dist.get((state(c["state"]), norm(c["district"])), []):
-            if key(c["name"]) == key(u["name"]):
-                cands.append((0.5, c["code"], u["udise"], "dist+name", 1.0))
+        same = [u for u in by_dist.get((state(c["state"]), norm(c["district"])), []) if key(c["name"]) == key(u["name"])]
+        if len(same) == 1 and cisce_names[(state(c["state"]), norm(c["district"]), key(c["name"]))] == 1:   # unique on both sides
+            cands.append((0.5, c["code"], same[0]["udise"], "dist+name", 1.0))
     used_c, used_u, out = set(), set(), []
     for _, code, ud, method, sc in sorted(cands, reverse=True):
         if code in used_c or ud in used_u:
