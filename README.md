@@ -9,8 +9,13 @@ The list of CISCE affiliated schools for the s1d-labs scrape pool, from every pu
 | `cisce-scraper-schools` | `crawl` | [locate.cisce.org](https://locate.cisce.org/), the official locator, 10 schools per page | paused: Cloudflare shows an interactive check to automated browsers (`family.py` `PAGES = 0`) |
 | `cisce-scraper-wayback` | `history` | full lists of the old official locator (www.cisce.org/locate-search.aspx), Wayback Machine copies 2015-2022; locate.cisce.org/result of 2025-11-02 (every school on one page); devlocate.cisce.org pages of 2026 | 11 lists + 1 full list + 51 pages |
 | `cisce-scraper-locator-cache` | `history` | locate.cisce.org pages of 2026-10-20 from a public raw cache (see credits) | 169 pages |
+| `cisce-scraper-frc-gujarat` | `history` | [frcgujarat.org](https://frcgujarat.org/Home/SearchSchool) school list of the Gujarat Fee Regulation Committee: all boards, UDISE code, board, medium (`frc.py`) | pilot of 5 pages, then about 1,563 pages each month |
 
-Record id: the affiliation code (`crawl`), or `<date>:<code>` (`history`, one record per list).
+Record id: the affiliation code (`crawl`), `<date>:<code>` (`history`, one record per list), or `<frc id>:<medium>:<board>` (FRC).
+
+`watch.py` (workflow `watch`, Mondays) looks for new Wayback copies of locate.cisce.org listing pages and opens an issue with a branch.
+Pages that only a person can open: [insightLegion/local-scrape-kit](https://github.com/insightLegion/local-scrape-kit) (browser scripts with
+rate limits and hard stops); `link/merge.py` reads its `cisce-pages-*.json` files from `<dir>/locator-<date>-saved-by-hand/`.
 
 ## Merge and links
 
