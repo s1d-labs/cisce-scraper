@@ -21,7 +21,7 @@ q "create table if not exists cisce_scraper.cisce_2021 (code text, name_and_plac
 q "comment on table cisce_scraper.cisce_2021 is 'CISCE list of 2021, public dataset github.com/Nitish-Kumar-kushwaha/list-of-all-CISCE-schools-in-India (5 codes twice)'"
 q "create table if not exists cisce_scraper.link_cisce_udise (code text, udise text, method text, score float8, source text)"
 q "comment on table cisce_scraper.link_cisce_udise is 'CISCE code to UDISE code (link/link.py); method = how it matched; source = which CISCE list'"
-q "drop view if exists cisce_scraper.schools; drop view if exists cisce_scraper.schools_full; drop view if exists cisce_scraper.udise_without_code"
+q "drop view if exists cisce_scraper.frc_board_check; drop view if exists cisce_scraper.schools; drop view if exists cisce_scraper.schools_full; drop view if exists cisce_scraper.udise_without_code"
 q "drop table if exists cisce_scraper.cisce_all; create table cisce_scraper.cisce_all (code text primary key, name text, state text, district text,
    locality text, address text, pin text, country text, gender text, residence text, status text, icse bool, isc bool, cve bool, head text,
    phones text, email text, website text, lat float8, lng float8, first_seen date, last_seen date, on_locator_2026 bool, n_sources int, sources text)"
@@ -60,3 +60,5 @@ if [ -f "$D/hc_orders.csv" ]; then
   q "comment on table cisce_scraper.hc_orders is 'High Court orders with CISCE as a party (hub court-judgments-hc, S3 indian-high-court-judgments), topic by keywords, school petitioners linked to CISCE codes by name (a candidate, not a fact). No person names'"
   psql -d ws_trideep -v ON_ERROR_STOP=1 -qc "\copy cisce_scraper.hc_orders from '$D/hc_orders.csv' csv header"
 fi
+# the FRC check view depends on cisce_all and link_cisce_udise: rebuild it when the FRC table is there
+if [ -n "$(psql -d ws_trideep -Atc "select to_regclass('cisce_scraper.frc_gujarat')")" ]; then bash "$(dirname "$0")/load_frc.sh" --view; fi
