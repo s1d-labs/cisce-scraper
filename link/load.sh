@@ -53,3 +53,10 @@ psql -d ws_trideep -Atc "select 'udise_cisce', count(*) from cisce_scraper.udise
   union all select 'cisce_2021', count(*) from cisce_scraper.cisce_2021 union all select 'link_cisce_udise', count(*) from cisce_scraper.link_cisce_udise
   union all select 'cisce_all', count(*) from cisce_scraper.cisce_all
   union all select 'udise_without_code', count(*) from cisce_scraper.udise_without_code"
+# High Court orders with CISCE as a party (link/hc_orders.py), if present
+if [ -f "$D/hc_orders.csv" ]; then
+  q "drop table if exists cisce_scraper.hc_orders; create table cisce_scraper.hc_orders (record_id text, court text, date date, topic text,
+     all_topics text, party text, school_party_name text, codes_in_text text, name_match text, disposal text, pdf text, has_text bool)"
+  q "comment on table cisce_scraper.hc_orders is 'High Court orders with CISCE as a party (hub court-judgments-hc, S3 indian-high-court-judgments), topic by keywords, school petitioners linked to CISCE codes by name (a candidate, not a fact). No person names'"
+  psql -d ws_trideep -v ON_ERROR_STOP=1 -qc "\copy cisce_scraper.hc_orders from '$D/hc_orders.csv' csv header"
+fi
