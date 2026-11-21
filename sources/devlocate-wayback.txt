@@ -43,9 +43,3 @@
 20260723161417 https://devlocate.cisce.org/?page=8
 20260403062251 https://devlocate.cisce.org/?page=9
 20260723161418 https://devlocate.cisce.org/?page=9
-20260403062240 https://devlocate.cisce.org/css/app.css
-20260403062252 https://devlocate.cisce.org/css/app.css
-20260723153046 https://devlocate.cisce.org/css/app.css
-20260723153058 https://devlocate.cisce.org/css/app.css
-20260403062242 https://devlocate.cisce.org/favicon.ico
-20260723153047 https://devlocate.cisce.org/favicon.ico

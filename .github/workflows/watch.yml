@@ -1,0 +1,39 @@
+name: watch
+
+# Weekly: new Wayback copies (HTTP 200) of locate.cisce.org listing pages (watch.py). The site itself shows a Cloudflare check to
+# every automated route. New copies go on a branch "watch/<date>" and into an issue with the link to open the pull request
+# (this repo does not let Actions open pull requests). After the merge, the daily setup run seeds them into cisce-scraper-wayback.
+on:
+  schedule:
+    - cron: "15 3 * * 1"        # Monday 03:15 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - id: w
+        run: python watch.py
+      - if: steps.w.outputs.new != '0' && steps.w.outputs.new != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          b="watch/$(date -u +%Y-%m-%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$b"
+          git commit -qam "Wayback: ${{ steps.w.outputs.new }} new copies of locate.cisce.org listing pages"
+          git push -q origin "$b"
+          gh issue create --title "Wayback: ${{ steps.w.outputs.new }} new locate.cisce.org copies ($b)" --body "watch.py found new copies with HTTP 200. Branch: \`$b\`.
+
+          Open the pull request: https://github.com/${{ github.repository }}/compare/main...$b?expand=1
+          After the merge: run setup (Actions -> setup) or wait for the daily run. Then merge them on the box (link/merge.py)."

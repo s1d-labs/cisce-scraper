@@ -69,8 +69,8 @@ def sources():
                 "url": f"https://web.archive.org/web/{ts}id_/{url}", "kind": "new", "expected": 10,
                 "date": f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}", "source": "web.archive.org copy of " + url}} for ts, url in dev] + [
             # locate.cisce.org/result with no filter: every school on one page (found 2026-11-17; 3,221 schools on 2025-11-02)
-            {"key": f"locator-{ts}", "payload": {
-                "url": f"https://web.archive.org/web/{ts}id_/{url}", "kind": "new", "expected": 3200,
+            {"key": f"locator-{ts}" + (f"-{url.rsplit('=', 1)[1]}" if "page=" in url else ""), "payload": {
+                "url": f"https://web.archive.org/web/{ts}id_/{url}", "kind": "new", "expected": 10 if "page=" in url else 3200,
                 "date": f"{ts[:4]}-{ts[4:6]}-{ts[6:8]}", "source": "web.archive.org copy of " + url}} for ts, url in full],
         "locator-cache": [{"key": u.rsplit("/", 1)[1].split(".")[0][:16], "payload": {
             "url": u, "kind": "new", "expected": 10, "date": "2026-10-20",
