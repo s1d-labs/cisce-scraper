@@ -13,6 +13,8 @@ The list of CISCE affiliated schools for the s1d-labs scrape pool, from every pu
 
 Record id: the affiliation code (`crawl`), `<date>:<code>` (`history`, one record per list), or `<frc id>:<medium>:<board>` (FRC).
 
+`sources/cisce-notices.csv`: CISCE public notices that name school codes (disaffiliation, NOC), with the Wayback copy of each PDF.
+
 `watch.py` (workflow `watch`, Mondays) looks for new Wayback copies of locate.cisce.org listing pages and opens an issue with a branch.
 Pages that only a person can open: [insightLegion/local-scrape-kit](https://github.com/insightLegion/local-scrape-kit) (browser scripts with
 rate limits and hard stops); `link/merge.py` reads its `cisce-pages-*.json` files from `<dir>/locator-<date>-saved-by-hand/`.
