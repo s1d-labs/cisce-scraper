@@ -50,8 +50,8 @@ PROJECTS += [
 
 import frc  # noqa: E402
 
-# Gujarat Fee Regulation Committee school list (all boards, with UDISE codes): first pool run with 5 pages, then frc.PAGES.
-FRC_PAGES = 5
+# Gujarat Fee Regulation Committee school list (all boards, with UDISE codes). Pilot of 5 pages on 2026-11-21: 50 records, 0 errors.
+FRC_PAGES = frc.PAGES
 PROJECTS += [
     {
         "name": f"{FAMILY}-frc-gujarat", "title": "Gujarat FRC school list (frcgujarat.org): UDISE code, board, medium",
