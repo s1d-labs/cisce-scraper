@@ -64,3 +64,12 @@ def test_locator_table_layout_2025():
     assert r["icse"] and r["isc"] and not r["cve"] and r["website"] == "fatehacademy.com"
     assert r["phones"] == "9888774026; 9501108834" and r["email"].startswith("Head.PU100@")
     assert rows["DU001"]["country"] == "United Arab Emirates"
+
+
+def test_frc_gujarat_list_page():
+    import frc
+    rows = dict(frc.parse((PAGES / "frc-gujarat-p1.html").read_text(encoding="utf-8")))
+    r = rows["20771:English:GSHSEB"]
+    assert len(rows) == 10 and r["SchoolCode"] == "24221531164" and r["SchoolName"] == "AADARSH MISSION SCHOOL(ENG MED)"
+    assert "54487:Gujarati:GSHSEB" in rows and "54487:English:GSHSEB" in rows      # one school, two media
+    assert frc.parse("<html>error</html>") is None and frc.parse("var jsonModel=[];\n") == []

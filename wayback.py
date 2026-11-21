@@ -83,6 +83,7 @@ def task():
     import requests
     from scrape_hub_client import HubClient, stop_flag, timed_get
     import crawl
+    import frc
     stop = stop_flag()
     deadline = time.time() + float(os.environ.get("SCRAPE_MAX_HOURS", "1")) * 3600 - 300
     hub = HubClient(os.environ["SCRAPE_POOL_PROJECT"], job_index=int(os.environ.get("SCRAPE_JOB_INDEX", "0")),
@@ -103,6 +104,16 @@ def task():
                 continue
             body = r.content
             page = (gzip.decompress(body) if body[:2] == b"\x1f\x8b" else body).decode("utf-8", "replace")
+            if p["kind"] == "frc":                  # Gujarat FRC list: one record per school, refreshed each month (id = FRC id)
+                rows = frc.parse(page)
+                if rows is None:
+                    hub.complete([key], "failed", error="no school list on the page")
+                    continue
+                for fid, d in rows:
+                    hub.record(fid, {**d, "seen": p["date"], "source": p["source"]})
+                hub.complete([key], "done", fetched=len(rows))   # an empty page after the end is done, not failed
+                time.sleep(max(2, hub.settings.get("delay_ms", 0) / 1000))
+                continue
             rows = parse_old(page) if p["kind"] == "old" else ([] if crawl.is_challenge(page) else crawl.parse(page))
             for code, d in rows:
                 hub.record(f"{p['date']}:{code}", {**d, "snapshot": p["date"], "source": p["source"]})

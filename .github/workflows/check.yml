@@ -35,6 +35,10 @@ jobs:
           [ "$n" -gt 0 ] || echo "::warning::locate.cisce.org did not let the runner through (Cloudflare challenge?)"
       - name: scrape-check, history task (local stand-in hub, 2 cached locator pages)
         run: scrape-check --items 2 --project cisce-scraper-locator-cache
+      - name: scrape-check, Gujarat FRC list (2 real pages; a dead or blocking site gives a warning, not a red PR)
+        continue-on-error: true
+        run: |
+          scrape-check --items 2 --project cisce-scraper-frc-gujarat || { echo "::warning::frcgujarat.org check failed from this runner (site down, or it refuses GitHub runners; then use proxy=IN)"; exit 1; }
       # the locator project has no queue items while Cloudflare blocks it (family.py PAGES = 0): add
       # `scrape-check --items 2 --project cisce-scraper-schools` here again when PAGES > 0
       - uses: actions/upload-artifact@v6
