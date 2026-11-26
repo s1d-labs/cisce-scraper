@@ -3,9 +3,11 @@
 python crawl.py --local [url]   fetches one page without the hub and prints the records.
 python crawl.py --files DIR     parses listing pages saved by hand in a browser (*.html) and prints the records (no network).
 
-The site is behind Cloudflare: plain HTTP gets 403, so pages load in headless Chromium (Playwright). A non-interactive check
-clears by itself in a few seconds. An interactive challenge ("Verify you are human") is never clicked: the task records a
-`cloudflare-challenge` failure, closes the run and exits, so the pool does not keep hitting the site.
+Fetch order: Scrapling `Fetcher` first (browser TLS fingerprint, ~0.45 s per page on 57 measured listing pages); a real
+Cloudflare challenge then goes to `StealthyFetcher(solve_cloudflare=True)` (about 2 minutes, only when a challenge appears);
+an interactive challenge ("Verify you are human") is never clicked. If Cloudflare solving cannot clear it, the run records a
+`cloudflare-challenge` failure, closes and exits, so the pool does not keep hitting the site. `requests` is the fallback when
+Scrapling is not installed. Plain `challenge-platform` scripts are not a challenge: the page must lack the expected markers.
 """
 import gzip
 import html
@@ -140,6 +142,46 @@ def parse(page):
     return out
 
 
+def fast_get(url, timeout=25):
+    """(status, html) from Scrapling's Fetcher, or None when there is no usable answer.
+
+    Scrapling 0.5 puts the body in `page.body`, not `str(page.text)`. A browser TLS fingerprint is enough for the open
+    listing pages and costs about 0.45 s; solving is left for the challenge path. `proxy` comes from the pool's SCRAPE_PROXY."""
+    try:
+        from scrapling.fetchers import Fetcher
+    except ImportError:
+        return None
+    proxy = os.environ.get("SCRAPE_PROXY") or None
+    try:
+        page = Fetcher.get(url, impersonate="chrome", timeout=timeout, proxy=proxy)
+    except Exception:
+        return None
+    status = getattr(page, "status", None)
+    body = getattr(page, "body", None) or b""
+    html = body.decode(getattr(page, "encoding", None) or "utf-8", errors="replace")
+    return status, html
+
+
+def solve_challenge(url, hub, timeout=150):
+    """(status, html) after Cloudflare solving, or ('challenge', '') when it did not clear.
+
+    This is expensive (about 2 minutes on a real challenge), so it runs only after `fast_get` sees a challenge or a 403."""
+    try:
+        from scrapling.fetchers import StealthyFetcher
+        proxy = os.environ.get("SCRAPE_PROXY") or None
+        t = time.time()
+        page = StealthyFetcher.fetch(url, headless=True, solve_cloudflare=True, timeout=int(timeout * 1000), proxy=proxy)
+        body = getattr(page, "body", None) or b""
+        text = body.decode(getattr(page, "encoding", None) or "utf-8", errors="replace")
+        status = getattr(page, "status", None)
+        count_request(hub, status, time.time() - t)
+        if status == 200 and not is_challenge(text):
+            return 200, text
+    except Exception:
+        count_request(hub, None, 0)
+    return "challenge", ""
+
+
 class Browser:
     """One headless Chromium and one context per process (keeps the Cloudflare clearance cookie between pages)."""
 
@@ -179,11 +221,18 @@ class Browser:
 
 
 def local(url):
-    hub, b = LocalHub(), Browser()
-    try:
-        status, page = b.get(hub, url)
-    finally:
-        b.close()
+    hub = LocalHub()
+    t = time.time()
+    status, page = fast_get(url) or (None, "")
+    count_request(hub, status, time.time() - t)
+    if status == 403 or is_challenge(page):
+        status, page = solve_challenge(url, hub)
+    if status == "challenge":
+        b = Browser()
+        try:
+            status, page = b.get(hub, url)
+        finally:
+            b.close()
     rows = parse(page) if status == 200 else []
     for rid, data in rows:
         print(json.dumps({"record_id": rid, "data": data}, ensure_ascii=False))
@@ -196,7 +245,6 @@ def main():
     hub = HubClient(PROJECT, job_index=int(os.environ.get("SCRAPE_JOB_INDEX", "0")), total_jobs=int(os.environ.get("SCRAPE_TOTAL_JOBS", "1")))
     b = None
     try:
-        b = Browser()
         while time.time() < DEADLINE and not stop.is_set():
             if hub.settings.get("paused"):
                 time.sleep(30)
@@ -205,7 +253,25 @@ def main():
             if not items:
                 break
             item = items[0]
-            status, page = b.get(hub, item["payload"]["url"])
+            url = item["payload"]["url"]
+            t = time.time()
+            got = fast_get(url)
+            if got is None:                            # Scrapling missing or errored: try plain requests
+                try:
+                    import requests
+                    r = requests.get(url, headers={"User-Agent": "s1d-labs scraper (https://github.com/s1d-labs)"}, timeout=25)
+                    got = (r.status_code, r.text)
+                except Exception:
+                    got = (None, "")
+            status, page = got
+            count_request(hub, status, time.time() - t)
+            if status == 403 or is_challenge(page):
+                hub.metric("cf_challenge_seen")
+                status, page = solve_challenge(url, hub)
+            if status == "challenge":
+                if b is None:                          # Scrapling could not clear it: keep the last, human-safe tier
+                    b = Browser()
+                status, page = b.get(hub, url)
             if status == "challenge":
                 hub.failure("cloudflare-challenge", item["key"], "Cloudflare challenge did not clear; not clicked", url=item["payload"]["url"])
                 hub.complete([item["key"]], "failed", error="cloudflare challenge")
